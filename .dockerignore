@@ -1,0 +1,4 @@
+# The build context is one jar. Everything else - sources, the 200 MB gradle cache, the .git
+# directory - would only slow the daemon down and risk baking something in by accident.
+*
+!build/dist/mcp-proxy.jar

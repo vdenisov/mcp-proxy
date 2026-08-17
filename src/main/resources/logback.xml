@@ -1,0 +1,19 @@
+<configuration>
+    <!--
+      Logback prints its own configuration status to System.out by default, which would corrupt the
+      protocol stream. Silence it. Shipping this file also stops logback's auto-configuration from
+      running and complaining about the missing config.
+    -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{24} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDERR"/>
+    </root>
+</configuration>

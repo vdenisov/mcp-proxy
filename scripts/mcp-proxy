@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# Launcher for the mcp-proxy fat jar.
+#
+# Nothing here may write to stdout. When an MCP client spawns the proxy, stdout carries JSON-RPC
+# frames and a single stray line corrupts the session - so every diagnostic goes to stderr.
+#
+# Jar lookup, in order: $MCP_PROXY_JAR, a jar beside this script (the packaged layout), then
+# ../build/libs (running straight out of a checkout).
+
+set -eu
+
+fail() {
+    echo "mcp-proxy: $1" >&2
+    exit 1
+}
+
+# Parameter expansion rather than dirname: the launcher then depends on nothing but shell builtins.
+# Not hypothetical - Git for Windows' sh, started directly rather than through its own wrapper,
+# inherits a PATH with no coreutils on it and `dirname` is simply absent.
+case $0 in
+    */*) script_dir=${0%/*} ;;
+    *) script_dir=. ;;
+esac
+script_dir=$(CDPATH='' cd -- "$script_dir" && pwd -P)
+
+if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+    java_cmd=$JAVA_HOME/bin/java
+else
+    java_cmd=java
+fi
+
+jar=${MCP_PROXY_JAR:-}
+
+if [ -z "$jar" ] && [ -f "$script_dir/mcp-proxy.jar" ]; then
+    jar=$script_dir/mcp-proxy.jar
+fi
+
+if [ -z "$jar" ]; then
+    # The plain jar task is classified -thin and has no main class, so skipping it is not cosmetic.
+    for candidate in "$script_dir"/../build/libs/mcp-proxy-*.jar; do
+        case $candidate in
+            *-thin.jar) continue ;;
+        esac
+        if [ -f "$candidate" ]; then
+            # shadowJar never cleans, so build/libs accumulates jars across version bumps. Taking
+            # whichever the glob yields last would silently run yesterday's build; refuse instead.
+            if [ -n "$jar" ]; then
+                fail "several jars in ../build/libs - clean the stale ones or set MCP_PROXY_JAR"
+            fi
+            jar=$candidate
+        fi
+    done
+fi
+
+if [ -z "$jar" ]; then
+    fail "could not find mcp-proxy.jar beside this script or in ../build/libs - set MCP_PROXY_JAR"
+fi
+if [ ! -f "$jar" ]; then
+    fail "$jar does not exist"
+fi
+
+# exec, so the JVM replaces this shell rather than hanging off it: an MCP client that kills the
+# launcher must kill the proxy too, signals arrive at the JVM, and the exit status is the proxy's own.
+# MCP_PROXY_JAVA_OPTS is deliberately unquoted - it carries a list of options, not one argument.
+exec "$java_cmd" ${MCP_PROXY_JAVA_OPTS:-} -jar "$jar" "$@"

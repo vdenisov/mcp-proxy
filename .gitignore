@@ -1,0 +1,16 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+*.log
+.mcp-proxy/
+
+# IntelliJ IDEA project files - machine- and user-specific, regenerated on import
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Internal design/working document - kept locally, not published.
+DESIGN.md

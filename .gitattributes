@@ -1,0 +1,14 @@
+# Normalise everything to LF in the repository and in the working tree. Without eol=lf, a checkout
+# on Windows would convert to CRLF and the next commit would show whole-file diffs.
+* text=auto eol=lf
+
+# Windows batch files only work with CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch these.
+*.jar binary
+*.zip binary
+*.gz binary
+*.png binary
+*.ico binary
