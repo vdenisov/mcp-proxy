@@ -31,6 +31,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.slf4j.MDCContext
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import org.plukh.mcpproxy.ExitCodes
@@ -149,6 +151,17 @@ class ProxyServer internal constructor(
 
     // --- MCP routes ---
 
+    /**
+     * Runs [block] with this session's identity in the logging context.
+     *
+     * It has to wrap the *route handler*, not the coroutine running `Relay.run`: the relay's own
+     * coroutine spends its life awaiting, while the work it logs about - rewriting the handshake,
+     * talking upstream, tearing down - happens inline on whichever request coroutine drove it.
+     * Tagging the relay's coroutine alone tagged almost nothing.
+     */
+    private suspend fun <T> Session.logged(block: suspend () -> T): T =
+        withContext(MDCContext(mapOf("ctx" to "$upstreamName/${id.take(8)}"))) { block() }
+
     private suspend fun ApplicationCall.rejectForeignOrigin(): Boolean {
         val origin = request.header(HttpHeaders.Origin) ?: return false
         val allowed = runCatching {
@@ -206,14 +219,14 @@ class ProxyServer internal constructor(
         response.header(SESSION_HEADER, session.id)
         if (frame.isRequest) {
             val answer = try {
-                session.downstream.postRequest(frame)
+                session.logged { session.downstream.postRequest(frame) }
             } catch (e: SessionClosedException) {
                 respondText("Not Found: session closed", status = HttpStatusCode.NotFound)
                 return
             }
             respondText(answer.encode(), ContentType.Application.Json, HttpStatusCode.OK)
         } else {
-            session.downstream.postOneWay(frame)
+            session.logged { session.downstream.postOneWay(frame) }
             respondText("", ContentType.Text.Plain, HttpStatusCode.Accepted)
         }
     }
@@ -254,7 +267,7 @@ class ProxyServer internal constructor(
         // dead, and the relay reaps asynchronously, so a request arriving right after would
         // otherwise still find the session. Removing twice is harmless.
         sessions.remove(session.id)
-        session.downstream.close()
+        session.logged { session.downstream.close() }
         respondText("", ContentType.Text.Plain, HttpStatusCode.OK)
     }
 
@@ -265,7 +278,11 @@ class ProxyServer internal constructor(
 
         val upstream = runtime.newSessionUpstream()
         val relay = Relay(downstream = downstream, upstream = upstream, identity = runtime.rewriter)
-        session.relayJob = scope.launch {
+        // Everything the relay logs is tagged with which upstream and which session it came from.
+        // With N sessions interleaving in one process, an untagged line is nearly useless - and the
+        // relay is where the interesting lines are. (Route handlers run on Ktor's own contexts and
+        // are not covered; they name the session in the message instead.)
+        session.relayJob = scope.launch(MDCContext(mapOf("ctx" to "${runtime.name}/${id.take(8)}"))) {
             val code = try {
                 relay.run()
             } catch (e: CancellationException) {

@@ -24,6 +24,7 @@ kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = 
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-coroutines-slf4j = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j", version.ref = "coroutines" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 
 [plugins]

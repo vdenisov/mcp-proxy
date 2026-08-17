@@ -22,6 +22,9 @@ application {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
+    // Carries the MDC across coroutine dispatches, so a session's log lines stay attributable when
+    // several sessions run in one process.
+    implementation(libs.kotlinx.coroutines.slf4j)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.ktor.client.core)

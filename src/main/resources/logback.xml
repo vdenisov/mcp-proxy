@@ -9,7 +9,8 @@
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{24} - %msg%n</pattern>
+            <!-- %X{ctx} is the session context (upstream/session-id) in server mode; empty otherwise. -->
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{24}%replace(%X{ctx}){"^(.+)$", " [$1]"} - %msg%n</pattern>
         </encoder>
     </appender>
 

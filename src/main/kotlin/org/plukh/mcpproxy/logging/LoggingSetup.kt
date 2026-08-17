@@ -38,7 +38,8 @@ object LoggingSetup {
 
         val encoder = PatternLayoutEncoder().apply {
             this.context = context
-            pattern = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"
+            // %replace keeps the brackets out of the line entirely when there is no session context.
+            pattern = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36}%replace(%X{ctx}){'^(.+)\$', ' [\$1]'} - %msg%n"
             start()
         }
         return FileAppender<ch.qos.logback.classic.spi.ILoggingEvent>().apply {
