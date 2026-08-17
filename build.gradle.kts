@@ -117,6 +117,10 @@ val dockerBuild = tasks.register<Exec>("dockerBuild") {
     dependsOn(packageDistribution)
     commandLine(
         "docker", "build",
+        // buildx defaults to attaching provenance and SBOM attestations, which turn a single-arch
+        // build into an OCI *index* carrying an extra `unknown/unknown` manifest. Consumers expect a
+        // plain image here, and GHCR's label-based repo linking does not see through the index.
+        "--provenance=false", "--sbom=false",
         "--build-arg", "VERSION=${project.version}",
         "-t", "$dockerImage:${project.version}",
         "-t", "$dockerImage:latest",
@@ -124,17 +128,25 @@ val dockerBuild = tasks.register<Exec>("dockerBuild") {
     )
 }
 
+// One Exec per tag rather than a single task looping in doLast: reaching for `project` at execution
+// time is deprecated and incompatible with the configuration cache. Two explicit pushes rather than
+// `--all-tags`, which would also push any other tag that happens to exist locally under this name.
+val dockerPushVersion = tasks.register<Exec>("dockerPushVersion") {
+    group = "distribution"
+    description = "Pushes the versioned tag to GHCR."
+    dependsOn(dockerBuild)
+    commandLine("docker", "push", "$dockerImage:${project.version}")
+}
+
+val dockerPushLatest = tasks.register<Exec>("dockerPushLatest") {
+    group = "distribution"
+    description = "Pushes the :latest tag to GHCR."
+    dependsOn(dockerBuild, dockerPushVersion)
+    commandLine("docker", "push", "$dockerImage:latest")
+}
+
 tasks.register("dockerPush") {
     group = "distribution"
     description = "Pushes both tags to GHCR. Authenticate first: docker login ghcr.io."
-    dependsOn(dockerBuild)
-    doLast {
-        // Two explicit pushes rather than --all-tags: that flag would also push any other tag that
-        // happens to exist locally under this image name.
-        listOf("${project.version}", "latest").forEach { tag ->
-            providers.exec {
-                commandLine("docker", "push", "$dockerImage:$tag")
-            }.standardOutput.asText.get().let(::print)
-        }
-    }
+    dependsOn(dockerPushVersion, dockerPushLatest)
 }
